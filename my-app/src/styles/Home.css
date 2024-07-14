@@ -1,0 +1,89 @@
+@import url('https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&display=swap');
+
+.home {
+    width: 100%;
+    align-items: center;
+    font-family: "Newsreader", sans-serif;
+    color: #3e497a;
+  }
+  
+  .about {
+    width: 100%;
+    height: calc(100vh - 100px);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    background-color: #f2f2ed;
+    font-family: "Newsreader";
+    color: black;
+  }
+  
+  .about h2 {
+    font-size: 60px;
+    font-optical-sizing: auto;
+    font-style: normal;
+    font-weight: 400;
+    margin: 0;
+  }
+  
+  .about .subtitle {
+    width: 40%;
+    font-size: 30px;
+  }
+  .subtitle svg {
+    font-size: 60px;
+    margin: 20px;
+    color: black;
+    margin-top: 120px;
+  }
+
+
+  
+  .skills {
+    font-size: 35px;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    flex-direction: column;
+    align-items: center;
+  }
+  
+  .skills h1 {
+    color: #3e497a;
+  }
+  
+  .skills .list {
+    list-style: none;
+    width: 60%;
+  }
+  
+  .list span {
+    font-size: 20px;
+  }
+  
+  @media only screen and (max-width: 600px) {
+    .about h2 {
+      font-size: 40px;
+    }
+  
+    .about .subtitle {
+      margin-top: 10px;
+      font-size: 20px;
+      width: 80%;
+    }
+  
+    .skills {
+      text-align: center;
+    }
+    .list {
+      padding: 0;
+    }
+  
+    .skills h2 {
+      font-size: 30px;
+    }
+  }
+
+  

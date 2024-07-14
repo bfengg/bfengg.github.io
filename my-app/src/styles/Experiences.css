@@ -1,0 +1,45 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&display=swap');
+
+.experience {
+    display: flex;
+    background-color: #f2f2ed;
+    height: calc(100vh - 100px);
+    display: flex;
+    font-family: "Newsreader", sans-serif;
+}
+
+.experience a {
+    display: flex;
+    background-color: #f2f2ed;
+    height: calc(100vh - 100px);
+    display: flex;
+    font-family: "Newsreader";
+}
+
+h3 {
+    margin-top: 1000px;
+}
+
+h4 {
+    font-style: italic;
+    font-weight: normal;
+}
+
+/* 
+.experience .vertical-timeline-element-title a {
+    font-family: "Inter", sans-serif;
+    font-size: 48px;
+}
+
+.vertical-timeline-element-title {
+    font-family: "Newsreader", sans-serif;
+  }
+  
+  .vertical-timeline-element-subtitle {
+    font-family: "Newsreader", sans-serif;
+  }
+  
+  .vertical-timeline-element-content p {
+    font-family: "Newsreader", sans-serif;
+  } */
