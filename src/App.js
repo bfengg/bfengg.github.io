@@ -3,6 +3,7 @@ import './App.css';
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import Home from "./pages/Home";
 import Experiences from "./pages/Experiences";
+import Visualizer from "./pages/Visualizer";
 import Navbar from "./components/Navbar";
 
 
@@ -15,6 +16,7 @@ function App() {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/experiences" element={<Experiences />} />
+          <Route path="/visualizer" element={<Visualizer />} />
         </Routes>
       </Router>
     </div>
