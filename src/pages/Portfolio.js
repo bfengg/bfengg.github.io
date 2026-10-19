@@ -9,10 +9,10 @@ const ENTRIES = [
     id: "incident-replay",
     title: "Incident replay in 3D",
     year: "2026",
-    stack: ["three.js WebGPU", "TSL shaders", "GPU-instanced particles", "Bloom", "React"],
+    stack: ["three.js WebGPU", "TSL shaders", "Compute shaders", "GPU-instanced particles", "Post-processing", "React"],
     summary:
-      "One OOMKilled pod turns into a Temporal retry storm and takes a whole cluster down. The replay flies through it with user journeys on top, services inside their business domains in the middle and the Kubernetes nodes, task queue and database underneath, so the same failure reads as a pod, a code path and a broken checkout at once.",
-    hint: "Drag to take the camera, scrub the timeline or jump to a phase, and switch layers on and off. The camera tunnels through the task queue as it backs up. All names and numbers are sample data.",
+      "A directed, 96-second film of one incident. A memory leak in a checkout worker gets it OOMKilled, Temporal retries the lost work without a cap, the task queue backs up, the rest of the cluster falls over, and every user journey goes dark. The camera rides a single request through each service and its stack frames, dives into the leaking pod, and tunnels through the backed-up queue. Lenses switch the same scene between what users saw, what the code did, and what the infrastructure did.",
+    hint: "It plays on its own. Pick a lens to hold one view, drag to take the camera, or jump between chapters on the timeline. All names and numbers are sample data.",
     Demo: IncidentReplay,
   },
 ];

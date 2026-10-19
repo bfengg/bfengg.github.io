@@ -1,14 +1,27 @@
 .ir-panel {
   position: relative;
   width: 100%;
-  height: min(82vh, 820px);
-  min-height: 520px;
+  height: min(86vh, 860px);
+  min-height: 560px;
   border-radius: 6px;
   overflow: hidden;
-  background: #07090a;
+  background: #05070a;
   color: #e7ebe2;
   font-family: "Inter", sans-serif;
   text-align: left;
+  --ir-accent: #a3e635;
+}
+
+.ir-panel[data-lens="journey"] {
+  --ir-accent: #f2f2ed;
+}
+
+.ir-panel[data-lens="code"] {
+  --ir-accent: #fde68a;
+}
+
+.ir-panel[data-lens="infra"] {
+  --ir-accent: #7dd3fc;
 }
 
 .ir-unsupported {
@@ -39,6 +52,21 @@
   cursor: grabbing;
 }
 
+/* Cinema bars while the director has the camera. */
+.ir-letterbox {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1500;
+  background: linear-gradient(#000 0, #000 34px, transparent 34px, transparent calc(100% - 34px), #000 calc(100% - 34px));
+  opacity: 0;
+  transition: opacity 0.6s ease;
+}
+
+.ir-panel[data-director] .ir-letterbox {
+  opacity: 0.85;
+}
+
 /* Labels ride on top of the canvas; the engine sets their position, depth and fade every frame. */
 .ir-labels {
   position: absolute;
@@ -51,12 +79,14 @@
   position: absolute;
   left: 0;
   top: 0;
+  opacity: 0;
   white-space: nowrap;
   font-size: 11px;
   letter-spacing: 0.02em;
   color: rgba(231, 235, 226, 0.78);
-  text-shadow: 0 0 4px #07090a, 0 0 8px #07090a;
+  text-shadow: 0 0 4px #05070a, 0 0 8px #05070a;
   will-change: transform, opacity;
+  transition: font-size 0.4s ease;
 }
 
 .ir-label em {
@@ -71,9 +101,17 @@
   color: #f2f2ed;
 }
 
+.ir-panel[data-lens="journey"] .ir-journey {
+  font-size: 26px;
+}
+
 .ir-service {
   font-family: ui-monospace, Menlo, monospace;
   color: #d9f99d;
+}
+
+.ir-panel[data-lens="code"] .ir-service {
+  font-size: 13px;
 }
 
 .ir-infra,
@@ -82,6 +120,10 @@
   font-family: ui-monospace, Menlo, monospace;
   font-size: 10px;
   color: #bae6fd;
+}
+
+.ir-panel[data-lens="infra"] :is(.ir-infra, .ir-pod, .ir-queue) {
+  font-size: 12px;
 }
 
 .ir-domain {
@@ -99,15 +141,11 @@
 
 .ir-frame {
   font-family: ui-monospace, Menlo, monospace;
-  font-size: 10px;
+  font-size: 12px;
   color: #fde68a;
-  padding: 2px 5px;
-  border-left: 2px solid rgba(253, 230, 138, 0.6);
-  background: rgba(7, 9, 10, 0.55);
-}
-
-.ir-labels:not([data-code]) .ir-frame {
-  display: none;
+  padding: 3px 7px;
+  border-left: 2px solid rgba(253, 230, 138, 0.7);
+  background: rgba(5, 7, 10, 0.6);
 }
 
 .ir-label.is-down {
@@ -121,29 +159,104 @@
 }
 
 .ir-top {
-  top: 16px;
+  top: 44px;
   left: 18px;
   right: 18px;
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   gap: 16px;
-  pointer-events: none;
 }
 
-.ir-phase h3 {
-  margin: 2px 0 0;
+.ir-lenses {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.ir-lenses button[aria-pressed="true"] {
+  background: var(--ir-accent);
+  border-color: var(--ir-accent);
+  color: #05070a;
+}
+
+.ir-lenses button[data-locked] {
+  box-shadow: 0 0 0 2px rgba(5, 7, 10, 0.9), 0 0 0 3px var(--ir-accent);
+}
+
+.ir-lens-mode {
+  font-size: 10px;
+  color: rgba(231, 235, 226, 0.45);
+  margin-left: 4px;
+}
+
+.ir-title {
+  position: absolute;
+  z-index: 2000;
+  left: 18px;
+  top: 92px;
+  max-width: 60%;
+  pointer-events: none;
+  animation: ir-title-in 0.9s ease both;
+}
+
+@keyframes ir-title-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+    filter: blur(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+
+.ir-kicker {
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 11px;
+  color: var(--ir-accent);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.ir-title h3 {
+  margin: 4px 0 0;
   font-family: "Newsreader", serif;
   font-weight: 400;
-  font-size: 30px;
+  font-size: 40px;
+  line-height: 1.05;
+  color: #f2f2ed;
+  text-shadow: 0 0 18px rgba(5, 7, 10, 0.9);
+}
+
+.ir-inside {
+  margin-top: 10px;
+  font-size: 12px;
+  color: rgba(231, 235, 226, 0.8);
+  animation: ir-title-in 0.4s ease both;
+}
+
+.ir-inside span {
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--ir-accent);
+}
+
+.ir-inside b {
+  font-family: ui-monospace, Menlo, monospace;
+  font-weight: 500;
   color: #f2f2ed;
 }
 
-.ir-step {
-  font-family: ui-monospace, Menlo, monospace;
-  font-size: 11px;
-  color: #a3e635;
-  letter-spacing: 0.12em;
+.ir-inside i {
+  font-style: normal;
+  color: rgba(231, 235, 226, 0.6);
+  margin-left: 6px;
 }
 
 .ir-journeys {
@@ -158,7 +271,7 @@
   padding: 5px 10px;
   border-radius: 999px;
   border: 1px solid rgba(163, 230, 53, 0.35);
-  background: rgba(7, 9, 10, 0.6);
+  background: rgba(5, 7, 10, 0.6);
   transition: border-color 0.4s, color 0.4s;
 }
 
@@ -186,12 +299,12 @@
 }
 
 .ir-story {
-  left: 18px;
-  bottom: 92px;
-  width: min(360px, calc(100% - 36px));
+  right: 18px;
+  bottom: 96px;
+  width: min(340px, calc(100% - 36px));
   padding: 12px 14px;
   border-radius: 6px;
-  background: rgba(7, 9, 10, 0.72);
+  background: rgba(5, 7, 10, 0.72);
   border: 1px solid rgba(231, 235, 226, 0.1);
   backdrop-filter: blur(6px);
 }
@@ -200,7 +313,12 @@
   margin: 0 0 8px;
   font-size: 13px;
   line-height: 1.4;
-  color: rgba(231, 235, 226, 0.88);
+  color: rgba(231, 235, 226, 0.35);
+  transition: color 0.5s ease;
+}
+
+.ir-story p[data-on] {
+  color: rgba(231, 235, 226, 0.92);
 }
 
 .ir-story p span {
@@ -210,7 +328,11 @@
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  color: #a3e635;
+  color: rgba(231, 235, 226, 0.4);
+}
+
+.ir-story p[data-on] span {
+  color: var(--ir-accent);
 }
 
 .ir-story dl {
@@ -239,7 +361,7 @@
 .ir-bottom {
   left: 18px;
   right: 18px;
-  bottom: 16px;
+  bottom: 42px;
   display: flex;
   align-items: center;
   gap: 14px;
@@ -249,19 +371,16 @@
   font: inherit;
   font-size: 12px;
   color: #e7ebe2;
-  background: rgba(7, 9, 10, 0.7);
+  background: rgba(5, 7, 10, 0.7);
   border: 1px solid rgba(231, 235, 226, 0.2);
   border-radius: 999px;
   padding: 6px 12px;
   cursor: pointer;
+  transition: background 0.3s, color 0.3s, border-color 0.3s;
 }
 
 .ir-panel button:hover {
-  border-color: rgba(163, 230, 53, 0.7);
-}
-
-.ir-panel button[aria-pressed="false"] {
-  opacity: 0.45;
+  border-color: var(--ir-accent);
 }
 
 .ir-play {
@@ -274,31 +393,31 @@
 .ir-timeline {
   position: relative;
   flex: 1;
-  padding-top: 22px;
+  padding-top: 20px;
 }
 
 .ir-timeline input {
   width: 100%;
-  accent-color: #a3e635;
+  accent-color: var(--ir-accent);
 }
 
 .ir-ticks button {
   position: absolute;
   top: 0;
   transform: translateX(-2px);
-  padding: 0 0 0 6px !important;
+  padding: 0 0 0 5px !important;
   border: 0 !important;
   border-left: 1px solid rgba(231, 235, 226, 0.35) !important;
   border-radius: 0 !important;
   background: none !important;
+  font-family: ui-monospace, Menlo, monospace;
   font-size: 10px !important;
   color: rgba(231, 235, 226, 0.55) !important;
-  white-space: nowrap;
 }
 
 .ir-ticks button[data-active] {
-  color: #a3e635 !important;
-  border-left-color: #a3e635 !important;
+  color: var(--ir-accent) !important;
+  border-left-color: var(--ir-accent) !important;
 }
 
 .ir-toggles {
@@ -307,40 +426,23 @@
   flex: none;
 }
 
-.ir-layers {
-  right: 18px;
-  bottom: 92px;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 6px;
-}
-
-.ir-layers [data-layer="journey"] {
-  border-color: rgba(242, 242, 237, 0.5);
-}
-
-.ir-layers [data-layer="service"] {
-  border-color: rgba(163, 230, 53, 0.5);
-}
-
-.ir-layers [data-layer="infra"] {
-  border-color: rgba(125, 211, 252, 0.5);
-}
-
-.ir-layers [data-layer="code"] {
-  border-color: rgba(253, 230, 138, 0.5);
-}
-
 .ir-backend {
   font-family: ui-monospace, Menlo, monospace;
   font-size: 10px;
   color: rgba(231, 235, 226, 0.45);
+  flex: none;
 }
 
 @media only screen and (max-width: 900px) {
-  .ir-ticks button:not([data-active]) {
-    font-size: 0 !important;
+  .ir-title h3 {
+    font-size: 30px;
+  }
+  .ir-story {
+    display: none;
+  }
+  .ir-lens-mode,
+  .ir-backend {
+    display: none;
   }
 }
 
@@ -348,14 +450,11 @@
   .ir-panel {
     height: 88vh;
   }
-  .ir-story dl {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  .ir-layers {
-    top: 96px;
-    bottom: auto;
-  }
   .ir-journeys {
     display: none;
+  }
+  .ir-title {
+    max-width: none;
+    right: 18px;
   }
 }

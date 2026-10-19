@@ -1,20 +1,37 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createEngine } from "../incident/engine";
-import { DOMAINS, DURATION, FRAMES, HOSTS, NODES, PHASES, PODS, QUEUE } from "../incident/scenario";
+import { CHAPTERS, DOMAINS, DURATION, HOSTS, NODES, PODS, QUEUE, RUNS_ON_LABEL } from "../incident/scenario";
 import "../styles/IncidentReplay.css";
 
-const LAYERS = [
-  { id: "journey", label: "User journeys" },
-  { id: "service", label: "Services & code" },
-  { id: "infra", label: "Infrastructure" },
+const LENSES = [
+  { id: "all", label: "Everything" },
+  { id: "journey", label: "Users" },
+  { id: "code", label: "Code" },
+  { id: "infra", label: "Infra" },
 ];
+const LENS_STORY = { journey: "journey", code: "code", infra: "infra" };
 const JOURNEYS = NODES.filter((n) => n.kind === "journey");
+const FRAME_LABELS = NODES.filter((n) => n.frames).flatMap((n) => n.frames.map((text, i) => ({ key: `frame:${n.id}:${i}`, text })));
 
 const status = (h) => (h >= 0.75 ? "failing" : h >= 0.25 ? "degraded" : "ok");
 const compact = (n) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : Math.round(n).toString());
 const seconds = (s) => (s < 1 ? `${Math.round(s * 1000)} ms` : s < 60 ? `${s.toFixed(0)} s` : `${(s / 60).toFixed(0)} min`);
 
-/** A scripted fly-through of a cascading incident, from the pod that got OOMKilled up to the users who couldn't check out. */
+function insideText(inside, state) {
+  if (!inside) return null;
+  if (inside.kind === "pod") {
+    const pod = PODS.find((p) => p.id === inside.id);
+    const mem = state?.pods[inside.id];
+    return { where: inside.id, detail: `pod on ${pod.host}${mem?.alive ? ` · ${Math.round(mem.memory * 512)} / 512 Mi` : ""}` };
+  }
+  if (inside.kind === "queue") return { where: QUEUE.id, detail: `Temporal task queue · ${compact(state?.metrics.queueDepth ?? 0)} tasks waiting` };
+  const node = NODES.find((n) => n.id === inside.id);
+  const domain = DOMAINS.find((d) => d.id === node.domain);
+  const runs = RUNS_ON_LABEL[node.id];
+  return { where: node.label, detail: [domain && `${domain.label} domain`, runs && `runs on ${runs}`, !domain && !runs && "infrastructure"].filter(Boolean).join(" · ") };
+}
+
+/** A directed fly-through of a cascading incident, from the pod that got OOMKilled up to the users who couldn't check out. */
 function IncidentReplay() {
   const stage = useRef(null);
   const canvas = useRef(null);
@@ -23,8 +40,7 @@ function IncidentReplay() {
   const [backend, setBackend] = useState(null);
   const [failed, setFailed] = useState(false);
   const [state, setState] = useState(null);
-  const [layers, setLayers] = useState({ journey: true, service: true, infra: true });
-  const [codeOn, setCodeOn] = useState(true);
+  const [lens, setLens] = useState(null);
 
   useEffect(() => {
     let disposed = false;
@@ -40,7 +56,7 @@ function IncidentReplay() {
       }
       instance = created;
       engine.current = created;
-      setBackend(created.backend);
+      setBackend(`${created.backend}${created.compute ? " · compute" : ""}`);
       const reduced = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
       if (!reduced) created.play();
     });
@@ -51,10 +67,10 @@ function IncidentReplay() {
     };
   }, []);
 
-  const toggleLayer = (id) => {
-    const next = { ...layers, [id]: !layers[id] };
-    setLayers(next);
-    engine.current?.setLayer(id, next[id]);
+  const pickLens = (id) => {
+    const next = lens === id ? null : id;
+    setLens(next);
+    engine.current?.setLens(next);
   };
 
   if (failed) {
@@ -62,7 +78,11 @@ function IncidentReplay() {
   }
 
   const t = state?.t ?? 0;
-  const phase = PHASES[state?.phase ?? 0];
+  const index = state?.chapter ?? 0;
+  const chapter = CHAPTERS[index];
+  const activeLens = state?.lens ?? "all";
+  const inside = insideText(state?.inside, state);
+  const director = state?.director ?? true;
   const label = (key, text, className) => (
     <span key={key} className={`ir-label ${className}`} ref={(el) => (labels.current[key] = el)}>
       {text}
@@ -70,13 +90,11 @@ function IncidentReplay() {
   );
 
   return (
-    <div className="ir-panel">
+    <div className="ir-panel" data-lens={activeLens} data-director={director || undefined}>
       <div className="ir-stage" ref={stage}>
         <canvas ref={canvas} className="ir-canvas" aria-label="3D replay of a cascading incident" />
-        <div className="ir-labels" data-code={codeOn || undefined} aria-hidden="true">
-          {NODES.map((n) =>
-            label(n.id, n.label, `ir-${n.layer}${state && (state.health[n.id] ?? 0) >= 0.75 ? " is-down" : ""}`)
-          )}
+        <div className="ir-labels" aria-hidden="true">
+          {NODES.map((n) => label(n.id, n.label, `ir-${n.layer}${state && (state.health[n.id] ?? 0) >= 0.75 ? " is-down" : ""}`))}
           {DOMAINS.map((d) => label(`domain:${d.id}`, d.label, "ir-domain"))}
           {HOSTS.map((h) => label(`host:${h.id}`, h.label, "ir-host"))}
           {PODS.map((p) =>
@@ -84,22 +102,33 @@ function IncidentReplay() {
               `pod:${p.id}`,
               <>
                 {p.id}
-                {state && !state.pods[p.id].alive && <em> OOMKilled</em>}
+                {state && !state.pods[p.id].alive && <em> {p.fate === "evicted" ? "Evicted" : "OOMKilled"}</em>}
                 {state && state.pods[p.id].alive && state.pods[p.id].memory > 0.8 && <em> {Math.round(state.pods[p.id].memory * 100)}% mem</em>}
               </>,
               "ir-pod"
             )
           )}
           {label("queue", <>{QUEUE.label}{state && <em> {compact(state.metrics.queueDepth)} waiting</em>}</>, "ir-queue")}
-          {FRAMES.map((f, i) => label(`frame:${i}`, f.text, "ir-frame"))}
+          {FRAME_LABELS.map((f) => label(f.key, f.text, "ir-frame"))}
         </div>
 
+        <div className="ir-letterbox" aria-hidden="true" />
+
         <div className="ir-hud ir-top">
-          <div className="ir-phase">
-            <span className="ir-step">
-              {String((state?.phase ?? 0) + 1).padStart(2, "0")} / {String(PHASES.length).padStart(2, "0")}
-            </span>
-            <h3>{phase.title}</h3>
+          <div className="ir-lenses" role="group" aria-label="Lens">
+            {LENSES.map((l) => (
+              <button
+                key={l.id}
+                type="button"
+                data-lens={l.id}
+                aria-pressed={activeLens === l.id}
+                data-locked={lens === l.id || undefined}
+                onClick={() => pickLens(l.id)}
+              >
+                {l.label}
+              </button>
+            ))}
+            <span className="ir-lens-mode">{lens ? "Your lens · click again to follow the story" : "Lens follows the story"}</span>
           </div>
           <div className="ir-journeys">
             {JOURNEYS.map((j) => {
@@ -113,19 +142,25 @@ function IncidentReplay() {
           </div>
         </div>
 
+        <div className="ir-title" key={index}>
+          <span className="ir-kicker">
+            Chapter {index + 1} of {CHAPTERS.length}
+          </span>
+          <h3>{chapter.title}</h3>
+          {inside && (
+            <div className="ir-inside">
+              <span>Inside</span> <b>{inside.where}</b> {inside.detail && <i>{inside.detail}</i>}
+            </div>
+          )}
+        </div>
+
         <div className="ir-hud ir-story">
-          <p>
-            <span>Infra</span>
-            {phase.infra}
-          </p>
-          <p>
-            <span>Code</span>
-            {phase.code}
-          </p>
-          <p>
-            <span>Users</span>
-            {phase.journey}
-          </p>
+          {["journey", "code", "infra"].map((key) => (
+            <p key={key} data-on={activeLens === "all" || LENS_STORY[activeLens] === key || undefined}>
+              <span>{key === "journey" ? "Users" : key === "code" ? "Code" : "Infra"}</span>
+              {chapter[key]}
+            </p>
+          ))}
           {state && (
             <dl>
               <div>
@@ -137,11 +172,11 @@ function IncidentReplay() {
                 <dd>{compact(state.metrics.retries)}</dd>
               </div>
               <div>
-                <dt>Schedule-to-start</dt>
+                <dt>Sched-to-start</dt>
                 <dd>{seconds(state.metrics.scheduleToStart)}</dd>
               </div>
               <div>
-                <dt>Error rate</dt>
+                <dt>Errors</dt>
                 <dd>{Math.round(state.metrics.errorRate)}%</dd>
               </div>
             </dl>
@@ -168,15 +203,16 @@ function IncidentReplay() {
               onChange={(event) => engine.current?.seek(Number(event.target.value))}
             />
             <div className="ir-ticks">
-              {PHASES.map((p, i) => (
+              {CHAPTERS.map((c, i) => (
                 <button
-                  key={p.title}
+                  key={c.title}
                   type="button"
-                  style={{ left: `${(p.start / DURATION) * 100}%` }}
-                  data-active={state?.phase === i || undefined}
-                  onClick={() => engine.current?.seek(p.start + 0.01)}
+                  style={{ left: `${(c.start / DURATION) * 100}%` }}
+                  data-active={index === i || undefined}
+                  aria-label={c.title}
+                  onClick={() => engine.current?.seek(c.start + 0.01)}
                 >
-                  {p.title}
+                  {i + 1}
                 </button>
               ))}
             </div>
@@ -185,21 +221,10 @@ function IncidentReplay() {
             <button type="button" onClick={() => engine.current?.setSpeed(state?.speed === 2 ? 1 : 2)}>
               {state?.speed === 2 ? "2×" : "1×"}
             </button>
-            <button type="button" aria-pressed={state?.director ?? true} onClick={() => engine.current?.setDirector(!(state?.director ?? true))}>
-              {state?.director === false ? "Free camera" : "Director"}
+            <button type="button" aria-pressed={director} onClick={() => engine.current?.setDirector(!director)}>
+              {director ? "Director" : "Free camera"}
             </button>
           </div>
-        </div>
-
-        <div className="ir-hud ir-layers">
-          {LAYERS.map((l) => (
-            <button key={l.id} type="button" aria-pressed={layers[l.id]} data-layer={l.id} onClick={() => toggleLayer(l.id)}>
-              {l.label}
-            </button>
-          ))}
-          <button type="button" aria-pressed={codeOn} data-layer="code" onClick={() => setCodeOn(!codeOn)}>
-            Code frames
-          </button>
           {backend && <span className="ir-backend">{backend}</span>}
         </div>
       </div>
