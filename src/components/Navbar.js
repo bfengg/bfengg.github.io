@@ -29,6 +29,7 @@ function Navbar() {
       <div className="links">
         <Link to="https://medium.com/@brianfeng717_79832"> Articles </Link>
         <Link to="/experiences"> Experiences </Link>
+        <Link to="/portfolio"> Portfolio </Link>
       </div>
     </div>
   );

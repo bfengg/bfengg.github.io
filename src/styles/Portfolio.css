@@ -1,0 +1,98 @@
+@import url("https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&display=swap");
+
+.portfolio {
+  min-height: calc(100vh - 100px);
+  background-color: #f2f2ed;
+  padding: 20px 70px 80px;
+  box-sizing: border-box;
+  font-family: "Newsreader", serif;
+  color: black;
+  text-align: left;
+}
+
+.portfolio-head h2 {
+  font-size: 48px;
+  font-weight: 400;
+  margin: 0;
+}
+
+.portfolio-head p {
+  margin: 4px 0 40px;
+  font-size: 20px;
+  font-style: italic;
+}
+
+.portfolio-entry {
+  margin-bottom: 64px;
+}
+
+.portfolio-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+}
+
+.portfolio-meta h3 {
+  margin: 0;
+  font-size: 30px;
+  font-weight: 500;
+  color: #36541b;
+}
+
+.portfolio-meta span {
+  font-family: sans-serif;
+  font-size: 14px;
+  color: #6b6b63;
+}
+
+.portfolio-summary {
+  max-width: 760px;
+  font-size: 20px;
+  line-height: 1.45;
+  margin: 10px 0 14px;
+}
+
+.portfolio-stack {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  list-style: none;
+  padding: 0;
+  margin: 0 0 20px;
+}
+
+.portfolio-stack li {
+  font-family: sans-serif;
+  font-size: 12px;
+  padding: 4px 10px;
+  border: 1px solid #36541b;
+  border-radius: 999px;
+  color: #36541b;
+}
+
+.portfolio-loading {
+  height: min(82vh, 820px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: #07090a;
+  color: #e7ebe2;
+  font-family: sans-serif;
+}
+
+.portfolio-hint {
+  font-size: 16px;
+  font-style: italic;
+  color: #4b4b45;
+  margin-top: 12px;
+}
+
+@media only screen and (max-width: 600px) {
+  .portfolio {
+    padding: 10px 16px 60px;
+  }
+  .portfolio-head h2 {
+    font-size: 36px;
+  }
+}
