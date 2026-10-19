@@ -82,6 +82,7 @@ import {
   CHAPTERS,
   DOMAINS,
   DURATION,
+  FOCUS_POD,
   HOSTS,
   JOURNEY_FAILS,
   KILLS,
@@ -89,7 +90,9 @@ import {
   PATHS,
   PODS,
   QUEUE,
+  RIDE,
   RUNS_ON,
+  STORM_PATH,
   podCenter,
   stateAt,
 } from "./scenario";
@@ -288,7 +291,7 @@ export async function createEngine({ canvas, stage, labelRefs, onTick }) {
     return { spec, base, lattice, uniforms: [shell, wire] };
   });
 
-  /* ---------- journeys, services, Temporal, Postgres ---------- */
+  /* ---------- journeys, services, the API server, DNS and etcd ---------- */
   const nodes = NODES.map((spec) => {
     const g = glow({ near: 0.5 });
     let geometry;
@@ -365,14 +368,14 @@ export async function createEngine({ canvas, stage, labelRefs, onTick }) {
     burst.rotation.x = Math.PI / 2;
     group.add(burst);
     const pod = { spec, center, group, edges, walls, gauge, fill, burst, burstGlow, cache: null, debris: null };
-    if (spec.service === "worker") {
-      // The receipt cache: PDFs stacking up as memory grows.
+    if (spec.cache) {
+      // Cubes inside the pod: requests piling up in an API server, or answers in a node's DNS cache.
       const material = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false });
       const shown = uniform(0);
       const fi = instanceIndex.toFloat();
       const slot = vec3(mod(fi, 5), floor(fi.div(25)), mod(floor(fi.div(5)), 5));
       material.positionNode = positionLocal.add(slot.mul(0.12).sub(vec3(0.24, 0.3, 0.24)));
-      material.colorNode = vec3(0.75, 0.5, 0.18);
+      material.colorNode = spec.cache === "dns" ? vec3(0.3, 0.72, 0.95) : vec3(0.85, 0.48, 0.16);
       material.opacityNode = step(fi, shown).mul(0.22).mul(fade.infra).mul(nearFade(0.14));
       const cache = new Mesh(keep(new BoxGeometry(0.085, 0.085, 0.085)), keep(material));
       cache.count = CACHE_SLOTS;
@@ -405,7 +408,7 @@ export async function createEngine({ canvas, stage, labelRefs, onTick }) {
   });
   const podById = Object.fromEntries(pods.map((p) => [p.spec.id, p]));
 
-  /* ---------- the task queue: a tube with stripes that crawl as it drains, wide enough to fly through ---------- */
+  /* ---------- the API call flood: a tube with stripes that rush faster as it swells, wide enough to fly through ---------- */
   const queueCurve = curveOf(QUEUE.points);
   const queueColor = uniform(new Color("#7dd3fc"));
   const queueFlow = uniform(0);
@@ -476,7 +479,7 @@ export async function createEngine({ canvas, stage, labelRefs, onTick }) {
     particles.frustumCulled = false;
     strata.links.add(particles);
   }
-  /* Backlog: tasks waiting in the queue, crowding in as it fills. */
+  /* The flood itself: API calls crowding into the tube as it swells. */
   {
     const material = new SpriteNodeMaterial({ transparent: true, depthWrite: false, blending: AdditiveBlending });
     const seed = hash(instanceIndex.add(5000));
@@ -510,15 +513,15 @@ export async function createEngine({ canvas, stage, labelRefs, onTick }) {
     scene.add(mesh);
   }
 
-  /* ---------- inside services: a membrane and a tunnel of stack-frame rings along the checkout path ---------- */
-  const checkoutCurve = curves[rowOf.checkout];
+  /* ---------- inside services: a membrane and a tunnel of stack-frame rings along the ride path ---------- */
+  const rideCurve = curves[rowOf[RIDE.path]];
   const frameAnchors = [];
   const membranes = [];
   const rings = [];
   NODES.filter((n) => n.frames).forEach((spec) => {
     const center = v3(spec.pos);
-    const u0 = closestU(checkoutCurve, center);
-    if (checkoutCurve.getPointAt(u0).distanceTo(center) > 0.3) return;
+    const u0 = closestU(rideCurve, center);
+    if (rideCurve.getPointAt(u0).distanceTo(center) > 0.3) return;
     const membrane = glow({ near: 0.08, side: DoubleSide });
     const cell = uv().mul(vec2(28, 14));
     const line = max(smoothstep(0.985, 1, abs(sin(cell.x.mul(PI)))), smoothstep(0.985, 1, abs(sin(cell.y.mul(PI)))));
@@ -528,11 +531,11 @@ export async function createEngine({ canvas, stage, labelRefs, onTick }) {
     sphere.position.copy(center);
     strata.service.add(sphere);
     membranes.push({ spec, g: membrane, base: LAYER_COLOR[spec.layer] });
-    const length = checkoutCurve.getLength();
+    const length = rideCurve.getLength();
     spec.frames.forEach((text, i) => {
       const u = Math.min(0.999, Math.max(0.001, u0 + ((i - (spec.frames.length - 1) / 2) * 0.55) / length));
-      const pos = checkoutCurve.getPointAt(u);
-      const ahead = checkoutCurve.getPointAt(Math.min(1, u + 0.002));
+      const pos = rideCurve.getPointAt(u);
+      const ahead = rideCurve.getPointAt(Math.min(1, u + 0.002));
       const g = glow({ near: 0.12 });
       const ring = new Mesh(keep(new TorusGeometry(0.34, 0.01, 8, 64)), keep(g.material));
       ring.position.copy(pos);
@@ -578,6 +581,11 @@ export async function createEngine({ canvas, stage, labelRefs, onTick }) {
     anchors.forEach((anchor) => {
       const el = labelRefs.current[anchor.key];
       if (!el) return;
+      if (anchor.pod && !podById[anchor.pod].group.visible) {
+        el.style.opacity = "0";
+        el.style.visibility = "hidden";
+        return;
+      }
       tmp.copy(anchor.pod ? podById[anchor.pod].group.position : anchor.pos);
       tmp.y += anchor.lift;
       const dist = tmp.distanceTo(camera.position);
@@ -594,12 +602,15 @@ export async function createEngine({ canvas, stage, labelRefs, onTick }) {
   }
 
   /* ---------- the director ---------- */
-  const worker2 = v3(podCenter("checkout-worker-2"));
-  const nodeB = v3(HOSTS[1].center);
-  const dwellStops = [...NODES.filter((n) => n.frames).map((n) => v3(n.pos)), worker2];
-  const rideDwell = makeDwell(checkoutCurve, dwellStops, 3.2);
+  const focus = v3(podCenter(FOCUS_POD));
+  const gpuNodes = v3(HOSTS[1].center);
+  const dwellStops = [...NODES.filter((n) => n.frames).map((n) => v3(n.pos)), v3(podCenter(RIDE.pod))];
+  const rideDwell = makeDwell(rideCurve, dwellStops, 3.2);
   const tunnelDwell = makeDwell(queueCurve, [], 0);
-  const retryCurve = curves[rowOf.retry];
+  const retryCurve = curves[rowOf[STORM_PATH]];
+  const stormStart = retryCurve.getPointAt(0);
+  const STORM_LEAD = 3.4;
+  const stormU = (t, i) => clamp01((t - CHAPTERS[i].start - STORM_LEAD) / (chapterEnd(i) - CHAPTERS[i].start - STORM_LEAD - 0.4));
   const chapterEnd = (i) => CHAPTERS[i + 1]?.start ?? DURATION;
   const rideU = (t, i, lead = 0.8, tail = 0.6) => rideDwell((t - CHAPTERS[i].start - lead) / (chapterEnd(i) - CHAPTERS[i].start - lead - tail));
   const SHOTS = {
@@ -611,23 +622,27 @@ export async function createEngine({ canvas, stage, labelRefs, onTick }) {
     },
     ride: (t, i) => {
       const u = rideU(t, i);
-      const pos = checkoutCurve.getPointAt(Math.max(0, u - 0.004)).add(new Vector3(0, 0.1, 0));
-      return [pos, checkoutCurve.getPointAt(Math.min(1, u + 0.01)), 62];
+      const pos = rideCurve.getPointAt(Math.max(0, u - 0.004)).add(new Vector3(0, 0.1, 0));
+      return [pos, rideCurve.getPointAt(Math.min(1, u + 0.01)), 62];
     },
     "inside-pod": (t, i) => {
       const a = 0.4 + (t - CHAPTERS[i].start) * 0.16;
-      return [worker2.clone().add(new Vector3(Math.cos(a) * 0.31, 0.29, Math.sin(a) * 0.31)), worker2.clone().add(new Vector3(0, -0.18, 0)), 78];
+      return [focus.clone().add(new Vector3(Math.cos(a) * 0.31, 0.29, Math.sin(a) * 0.31)), focus.clone().add(new Vector3(0, -0.18, 0)), 78];
     },
     explode: (t, i) => {
       const k = smooth((t - CHAPTERS[i].start - 0.3) / 1.6);
-      const inside = worker2.clone().add(new Vector3(0.18, 0.16, 0.16));
-      const out = worker2.clone().add(new Vector3(3.2 + (t - CHAPTERS[i].start) * 0.15, 1.8, 4.6));
-      return [inside.lerp(out, k), worker2.clone(), 74 - k * 26];
+      const inside = focus.clone().add(new Vector3(0.18, 0.16, 0.16));
+      const out = focus.clone().add(new Vector3(3.2 + (t - CHAPTERS[i].start) * 0.15, 1.8, 4.6));
+      return [inside.lerp(out, k), focus.clone(), 74 - k * 26];
     },
     "ride-retry": (t, i) => {
-      const u = clamp01((t - CHAPTERS[i].start - 0.8) / (chapterEnd(i) - CHAPTERS[i].start - 1.2));
-      const pos = retryCurve.getPointAt(Math.max(0, u - 0.02)).add(new Vector3(0, 0.35, 0));
-      return [pos, retryCurve.getPointAt(Math.min(1, u + 0.02)), 58];
+      // Watch the agents drop onto the nodes, then follow one of their calls up into the API server.
+      const k = smooth((t - CHAPTERS[i].start - STORM_LEAD + 1) / 1.4);
+      const u = stormU(t, i);
+      const watch = stormStart.clone().add(new Vector3(2.2, 2.6, 4.4));
+      const pos = watch.lerp(retryCurve.getPointAt(Math.max(0, u - 0.03)).add(new Vector3(0, 0.9, 0.7)), k);
+      const look = gpuNodes.clone().lerp(retryCurve.getPointAt(Math.min(1, u + 0.08)), k);
+      return [pos, look, 58];
     },
     tunnel: (t, i) => {
       const u = 0.04 + tunnelDwell(smooth((t - CHAPTERS[i].start) / (chapterEnd(i) - CHAPTERS[i].start))) * 0.86;
@@ -635,7 +650,7 @@ export async function createEngine({ canvas, stage, labelRefs, onTick }) {
     },
     cascade: (t, i) => {
       const a = 0.7 + (t - CHAPTERS[i].start) * 0.07;
-      return [nodeB.clone().add(new Vector3(Math.sin(a) * 8, 3.4, Math.cos(a) * 8)), nodeB.clone().add(new Vector3(-2.2, 0.2, 0)), 46];
+      return [gpuNodes.clone().add(new Vector3(Math.sin(a) * 6.2, 4.8, Math.cos(a) * 6.2)), gpuNodes.clone().add(new Vector3(-0.6, -0.2, 0)), 44];
     },
     blast: (t, i) => {
       const k = smooth((t - CHAPTERS[i].start) / (chapterEnd(i) - CHAPTERS[i].start));
@@ -769,7 +784,7 @@ export async function createEngine({ canvas, stage, labelRefs, onTick }) {
       host.edges.fade.value = host.fillGlow.fade.value = fade.infra.value;
     });
 
-    // Pods: memory liquid, the receipt cache, OOM explosions and evictions.
+    // Pods: memory liquid, the cubes inside, overloads, removals and rollouts.
     let impact = 0;
     pods.forEach((pod) => {
       const s = podState[pod.spec.id];
@@ -777,7 +792,11 @@ export async function createEngine({ canvas, stage, labelRefs, onTick }) {
       const memColor = healthColor(new Color("#4ade80"), clamp01((s.memory - 0.55) / 0.45));
       pod.group.position.copy(pod.center);
       pod.group.rotation.set(0, 0, 0);
-      pod.group.visible = true;
+      // New pods (the telemetry agents) drop in from above as the rollout reaches them.
+      const spawn = smooth(s.sinceSpawn / 0.8);
+      pod.group.visible = s.present;
+      pod.group.position.y += (1 - spawn) * 1.4;
+      pod.group.scale.setScalar(Math.max(0.001, spawn));
       if (s.alive) {
         healthColor(LAYER_COLOR.infra, Math.max(0, s.memory - 0.5) * 2, pod.edges.color.value);
         pod.walls.color.value.copy(pod.edges.color.value);
@@ -787,7 +806,7 @@ export async function createEngine({ canvas, stage, labelRefs, onTick }) {
         pod.fill.scale.y = Math.max(0.02, s.memory) * 0.64;
         pod.fill.position.y = -0.32 + pod.fill.scale.y / 2;
         pod.edges.fade.value = pod.walls.fade.value = pod.gauge.fade.value = f;
-        if (pod.cache) pod.cache.shown.value = Math.max(0, (s.memory - 0.35) / 0.65) * CACHE_SLOTS;
+        if (pod.cache) pod.cache.shown.value = s.cache * CACHE_SLOTS;
       } else {
         pod.fill.visible = false;
         if (pod.cache) pod.cache.shown.value = 0;
@@ -855,22 +874,22 @@ export async function createEngine({ canvas, stage, labelRefs, onTick }) {
       s.g.fade.value = (1 - smooth((age - 1.2) / 0.6)) * Math.max(fade.journey.value, 0.5);
     });
 
-    // The hero comet: ahead of the camera on the ride, and on the retry loop.
+    // The hero comet: ahead of the camera on the ride, and on the telemetry agent's call.
     const ride = CHAPTERS.findIndex((c) => c.shot === "ride");
     const retry = CHAPTERS.findIndex((c) => c.shot === "ride-retry");
     if (state.chapter === ride) {
-      comet.row.value = rowOf.checkout;
+      comet.row.value = rowOf[RIDE.path];
       comet.u.value = Math.min(1, rideU(t, ride) + 0.022);
       comet.color.value.set("#e9ffb0");
       comet.on.value = 1;
     } else if (state.chapter === retry) {
-      comet.row.value = rowOf.retry;
-      comet.u.value = clamp01((t - CHAPTERS[retry].start - 0.8) / (chapterEnd(retry) - CHAPTERS[retry].start - 1.2)) + 0.03;
+      comet.row.value = rowOf[STORM_PATH];
+      comet.u.value = stormU(t, retry) + 0.03;
       comet.color.value.set("#fdba74");
       comet.on.value = 1;
     } else comet.on.value = 0;
 
-    flow += dt * (1 - state.queue * 0.85) * 4;
+    flow += dt * (0.8 + state.queue * 3.2) * 4;
     queueFlow.value = flow;
     queueFill.value = state.queue;
     healthColor(LAYER_COLOR.infra, state.queue, queueColor.value);

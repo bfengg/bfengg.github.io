@@ -11,8 +11,8 @@ const ENTRIES = [
     year: "2026",
     stack: ["three.js WebGPU", "TSL shaders", "Compute shaders", "GPU-instanced particles", "Post-processing", "React"],
     summary:
-      "A directed, 96-second film of one incident. A memory leak in a checkout worker gets it OOMKilled, Temporal retries the lost work without a cap, the task queue backs up, the rest of the cluster falls over, and every user journey goes dark. The camera rides a single request through each service and its stack frames, dives into the leaking pod, and tunnels through the backed-up queue. Lenses switch the same scene between what users saw, what the code did, and what the infrastructure did.",
-    hint: "It plays on its own. Pick a lens to hold one view, drag to take the camera, or jump between chapters on the timeline. All names and numbers are sample data.",
+      "A directed, 96-second film of OpenAI's outage on December 11, 2024. A new telemetry service made every node in every cluster call the Kubernetes API at once, the API servers fell over, and about 20 minutes later, when the nodes' DNS caches expired, services could no longer find each other. ChatGPT, the API and Sora went down for over four hours, and the fix was slow because removing the agent needed the API server it had broken. The camera rides one ChatGPT request through each service, follows a telemetry agent's call into the API server, flies down the flood of calls, and sits inside an API server as it drowns. Lenses switch the same scene between what users saw, what the code did, and what the infrastructure did.",
+    hint: "It plays on its own. Pick a lens to hold one view, drag to take the camera, or jump between chapters on the timeline. The events and times come from OpenAI's public postmortem; the topology is simplified, and the service names, stack frames and metric values are illustrative.",
     Demo: IncidentReplay,
   },
 ];

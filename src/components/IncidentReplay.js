@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createEngine } from "../incident/engine";
-import { CHAPTERS, DOMAINS, DURATION, HOSTS, NODES, PODS, QUEUE, RUNS_ON_LABEL } from "../incident/scenario";
+import { CHAPTERS, DOMAINS, DURATION, HOSTS, INCIDENT, NODES, PODS, QUEUE, RUNS_ON_LABEL } from "../incident/scenario";
 import "../styles/IncidentReplay.css";
 
 const LENSES = [
@@ -14,7 +14,7 @@ const JOURNEYS = NODES.filter((n) => n.kind === "journey");
 const FRAME_LABELS = NODES.filter((n) => n.frames).flatMap((n) => n.frames.map((text, i) => ({ key: `frame:${n.id}:${i}`, text })));
 
 const status = (h) => (h >= 0.75 ? "failing" : h >= 0.25 ? "degraded" : "ok");
-const compact = (n) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : Math.round(n).toString());
+const compact = (n) => (n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : Math.round(n).toString());
 const seconds = (s) => (s < 1 ? `${Math.round(s * 1000)} ms` : s < 60 ? `${s.toFixed(0)} s` : `${(s / 60).toFixed(0)} min`);
 
 function insideText(inside, state) {
@@ -22,16 +22,17 @@ function insideText(inside, state) {
   if (inside.kind === "pod") {
     const pod = PODS.find((p) => p.id === inside.id);
     const mem = state?.pods[inside.id];
-    return { where: inside.id, detail: `pod on ${pod.host}${mem?.alive ? ` · ${Math.round(mem.memory * 512)} / 512 Mi` : ""}` };
+    const host = HOSTS.find((h) => h.id === pod.host);
+    return { where: inside.id, detail: `pod on the ${host.label}${mem?.alive ? ` · ${Math.round(mem.memory * 100)}% memory` : ""}` };
   }
-  if (inside.kind === "queue") return { where: QUEUE.id, detail: `Temporal task queue · ${compact(state?.metrics.queueDepth ?? 0)} tasks waiting` };
+  if (inside.kind === "queue") return { where: QUEUE.label, detail: `${QUEUE.inside} · ${compact(state?.metrics.apiCalls ?? 0)} / s` };
   const node = NODES.find((n) => n.id === inside.id);
   const domain = DOMAINS.find((d) => d.id === node.domain);
   const runs = RUNS_ON_LABEL[node.id];
   return { where: node.label, detail: [domain && `${domain.label} domain`, runs && `runs on ${runs}`, !domain && !runs && "infrastructure"].filter(Boolean).join(" · ") };
 }
 
-/** A directed fly-through of a cascading incident, from the pod that got OOMKilled up to the users who couldn't check out. */
+/** A directed fly-through of a real cascading incident, from the Kubernetes control plane up to the users who lost ChatGPT, the API and Sora. */
 function IncidentReplay() {
   const stage = useRef(null);
   const canvas = useRef(null);
@@ -102,13 +103,13 @@ function IncidentReplay() {
               `pod:${p.id}`,
               <>
                 {p.id}
-                {state && !state.pods[p.id].alive && <em> {p.fate === "evicted" ? "Evicted" : "OOMKilled"}</em>}
+                {state && !state.pods[p.id].alive && <em> {p.down}</em>}
                 {state && state.pods[p.id].alive && state.pods[p.id].memory > 0.8 && <em> {Math.round(state.pods[p.id].memory * 100)}% mem</em>}
               </>,
               "ir-pod"
             )
           )}
-          {label("queue", <>{QUEUE.label}{state && <em> {compact(state.metrics.queueDepth)} waiting</em>}</>, "ir-queue")}
+          {label("queue", <>{QUEUE.label}{state && <em> {compact(state.metrics.apiCalls)} / s</em>}</>, "ir-queue")}
           {FRAME_LABELS.map((f) => label(f.key, f.text, "ir-frame"))}
         </div>
 
@@ -144,7 +145,7 @@ function IncidentReplay() {
 
         <div className="ir-title" key={index}>
           <span className="ir-kicker">
-            Chapter {index + 1} of {CHAPTERS.length}
+            Chapter {index + 1} of {CHAPTERS.length} · {state?.clock ?? "2:20 PM"} PST
           </span>
           <h3>{chapter.title}</h3>
           {inside && (
@@ -155,6 +156,7 @@ function IncidentReplay() {
         </div>
 
         <div className="ir-hud ir-story">
+          <h4>{INCIDENT.title}</h4>
           {["journey", "code", "infra"].map((key) => (
             <p key={key} data-on={activeLens === "all" || LENS_STORY[activeLens] === key || undefined}>
               <span>{key === "journey" ? "Users" : key === "code" ? "Code" : "Infra"}</span>
@@ -164,16 +166,16 @@ function IncidentReplay() {
           {state && (
             <dl>
               <div>
-                <dt>Queue depth</dt>
-                <dd>{compact(state.metrics.queueDepth)}</dd>
+                <dt>API calls / s</dt>
+                <dd>{compact(state.metrics.apiCalls)}</dd>
               </div>
               <div>
-                <dt>Retries / s</dt>
-                <dd>{compact(state.metrics.retries)}</dd>
+                <dt>API p99</dt>
+                <dd>{seconds(state.metrics.apiLatency)}</dd>
               </div>
               <div>
-                <dt>Sched-to-start</dt>
-                <dd>{seconds(state.metrics.scheduleToStart)}</dd>
+                <dt>DNS answered</dt>
+                <dd>{Math.round(state.metrics.dnsHit)}%</dd>
               </div>
               <div>
                 <dt>Errors</dt>
@@ -225,6 +227,9 @@ function IncidentReplay() {
               {director ? "Director" : "Free camera"}
             </button>
           </div>
+          <a className="ir-source" href={INCIDENT.source} target="_blank" rel="noreferrer">
+            Postmortem
+          </a>
           {backend && <span className="ir-backend">{backend}</span>}
         </div>
       </div>
